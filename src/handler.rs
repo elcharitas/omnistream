@@ -42,13 +42,23 @@ pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
             .unwrap());
     }
 
-    // Perform the search using the provided SearchRequest object
-    let search_results = crawl_and_search(&search_request).await;
-
-    // Return the search results as a JSON object with appropriate status code
-    Ok(Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Body::from(serde_json::to_vec(&search_results).unwrap()))
-        .unwrap())
+    // catch the error and return an error with appropriate status code
+    let search_results = match crawl_and_search(&search_request).await {
+        Ok(sr) => {
+            // Return the search results as a JSON object with appropriate status code
+            Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&sr).unwrap()))
+                .unwrap())
+        }
+        Err(_) => {
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .header("Content-Type", "application/json")
+                .body(Body::from("Internal server error"))
+                .unwrap());
+        }
+    };
+    search_results
 }

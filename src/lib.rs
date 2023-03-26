@@ -10,14 +10,14 @@ use select::predicate::Name;
 use std::sync::Arc;
 
 // This function crawls and searches a website based on the given SearchRequest
-pub async fn crawl_and_search(search_request: &SearchRequest) -> Vec<SearchResult> {
+pub async fn crawl_and_search(
+    search_request: &SearchRequest,
+) -> Result<Vec<SearchResult>, reqwest::Error> {
     // Retrieve the sitemap
     let sitemap = reqwest::get(&search_request.sitemap_url)
         .await
-        .expect("Failed to fetch sitemap")
-        .text()
-        .await
-        .expect("Failed to parse sitemap");
+        .expect("Failed to fetch sitemap");
+    let sitemap = sitemap.text().await.expect("Failed to parse sitemap");
 
     let document = Document::from(sitemap.as_str());
 
@@ -66,5 +66,5 @@ pub async fn crawl_and_search(search_request: &SearchRequest) -> Vec<SearchResul
         .collect::<Vec<SearchResult>>()
         .await;
 
-    results
+    Ok(results)
 }
