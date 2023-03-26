@@ -8,13 +8,15 @@ use crate::enums::SearchRequest;
 pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
     // Convert the request body to a string
     let body = String::from_utf8(request.body().to_vec())?;
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json");
 
     // If the request body is empty, return an error with appropriate status code
     if body.is_empty() {
-        return Ok(Response::builder()
+        return Ok(response
             .status(StatusCode::BAD_REQUEST)
-            .header("Content-Type", "application/json")
-            .body(Body::from("Please specify query"))
+            .body(Body::from("Please specify `query` and `sitemap_url`"))
             .unwrap());
     }
 
@@ -25,9 +27,8 @@ pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
     let search_request = match search_request {
         Ok(sr) => sr,
         Err(_) => {
-            return Ok(Response::builder()
+            return Ok(response
                 .status(StatusCode::BAD_REQUEST)
-                .header("Content-Type", "application/json")
                 .body(Body::from("Invalid request format"))
                 .unwrap());
         }
@@ -35,9 +36,8 @@ pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
 
     // If the query or sitemap_url is empty, return an error with appropriate status code
     if search_request.query.is_empty() || search_request.sitemap_url.is_empty() {
-        return Ok(Response::builder()
+        return Ok(response
             .status(StatusCode::BAD_REQUEST)
-            .header("Content-Type", "application/json")
             .body(Body::from("Please specify query and sitemap_url"))
             .unwrap());
     }
@@ -46,16 +46,14 @@ pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
     let search_results = match crawl_and_search(&search_request).await {
         Ok(sr) => {
             // Return the search results as a JSON object with appropriate status code
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
+            Ok(response
                 .body(Body::from(serde_json::to_vec(&sr).unwrap()))
                 .unwrap())
         }
-        Err(_) => {
-            return Ok(Response::builder()
+        Err(err) => {
+            print!("{}", err);
+            return Ok(response
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .header("Content-Type", "application/json")
                 .body(Body::from("Internal server error"))
                 .unwrap());
         }
