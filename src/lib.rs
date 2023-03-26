@@ -1,5 +1,6 @@
 // Import necessary dependencies
 mod enums;
+mod extraction;
 pub mod handler;
 
 use enums::{SearchRequest, SearchResult};
@@ -47,7 +48,10 @@ pub async fn crawl_and_search(search_request: &SearchRequest) -> Vec<SearchResul
                         Some(SearchResult {
                             title: title.text(),
                             url: link.clone(),
-                            snippet: None, // TODO: Implement snippet extraction
+                            snippet: extraction::extract_snippet(
+                                content.as_str(),
+                                &search_request.query,
+                            ),
                         })
                     } else {
                         None
