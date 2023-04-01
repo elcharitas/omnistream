@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchRequest {
     pub query: String,
-    pub sitemap_url: String,
+    pub sitemap_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

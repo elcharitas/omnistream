@@ -6,18 +6,40 @@ pub mod handler;
 use enums::{SearchRequest, SearchResult};
 use futures::stream::{self, StreamExt};
 use select::document::Document;
-use select::predicate::Name;
+use select::predicate::{Any, Name};
 use std::sync::Arc;
+
+fn get_sitemap_url(query: SearchRequest) -> String {
+    match query.sitemap_url {
+        Some(url) => url,
+        None => {
+            let mut url = String::from("https://google.com/sitemap.xml");
+            let query = query.query.split_whitespace();
+            for word in query {
+                if word.starts_with("site:") {
+                    url = word.replace("site:", "");
+                }
+            }
+            url
+        }
+    }
+}
 
 // This function crawls and searches a website based on the given SearchRequest
 pub async fn crawl_and_search(
     search_request: &SearchRequest,
 ) -> Result<Vec<SearchResult>, reqwest::Error> {
+    let sitemap_url = get_sitemap_url(search_request.clone());
+
     // Retrieve the sitemap
-    let sitemap = reqwest::get(&search_request.sitemap_url)
+    let sitemap_response = reqwest::get(&sitemap_url)
         .await
         .expect("Failed to fetch sitemap");
-    let sitemap = sitemap.text().await.expect("Failed to parse sitemap");
+
+    let sitemap = sitemap_response
+        .text()
+        .await
+        .expect("Failed to parse sitemap");
 
     let document = Document::from(sitemap.as_str());
 
@@ -27,6 +49,7 @@ pub async fn crawl_and_search(
     // Crawl the links and perform the search in parallel
     let search_request = Arc::new(search_request.clone());
     let results = stream::iter(links.into_iter())
+        .take(10)
         .map(|link| {
             let search_request = Arc::clone(&search_request);
             async move {
@@ -37,14 +60,15 @@ pub async fn crawl_and_search(
                     .await
                     .expect("Failed to parse link content");
 
-                let doc = Document::from(content.as_str());
+                let search_doc = Document::from(content.as_str());
 
-                if let Some(title) = doc.find(Name("title")).next() {
-                    if title
-                        .text()
-                        .to_lowercase()
-                        .contains(&search_request.query.to_lowercase())
-                    {
+                let query_lowercase = search_request.query.to_lowercase();
+
+                if let Some(title) = search_doc.find(Name("title")).next() {
+                    let has_query = search_doc
+                        .find(Any)
+                        .any(|element| element.text().to_lowercase().contains(&query_lowercase));
+                    if has_query {
                         Some(SearchResult {
                             title: title.text(),
                             url: link.clone(),
