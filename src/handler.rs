@@ -9,10 +9,12 @@ use serde_urlencoded::from_str;
 // This function handles search requests, performing input validation and returning search results
 pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
     // Convert the request body to a string
-    let body = String::from_utf8(request.body().to_vec())?;
     let search_request: SearchRequest = match *request.method() {
         Method::GET => from_str(request.uri().query().unwrap_or(""))?,
-        Method::POST => serde_json::from_str(&body)?,
+        Method::POST => {
+            let body = String::from_utf8(request.body().to_vec())?;
+            serde_json::from_str(&body)?
+        }
         _ => {
             return Ok(Response::builder()
                 .status(StatusCode::METHOD_NOT_ALLOWED)
