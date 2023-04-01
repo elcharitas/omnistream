@@ -47,11 +47,15 @@ pub async fn crawl_and_search(
     let links: Vec<_> = document.find(Name("loc")).map(|n| n.text()).collect();
 
     // Crawl the links and perform the search in parallel
-    let search_request = Arc::new(search_request.clone());
+    let search_query = Arc::new(search_request.query.clone());
+    let per_page = search_request.per_page.unwrap_or(5) as usize;
+    let page = search_request.page.unwrap_or(1) as usize;
+
     let results = stream::iter(links.into_iter())
-        .take(10)
+        .skip((page - 1) * per_page)
+        .take(per_page)
         .map(|link| {
-            let search_request = Arc::clone(&search_request);
+            let search_query = Arc::clone(&search_query);
             async move {
                 let content = reqwest::get(&link)
                     .await
@@ -62,20 +66,18 @@ pub async fn crawl_and_search(
 
                 let search_doc = Document::from(content.as_str());
 
-                let query_lowercase = search_request.query.to_lowercase();
-
                 if let Some(title) = search_doc.find(Name("title")).next() {
-                    let has_query = search_doc
-                        .find(Any)
-                        .any(|element| element.text().to_lowercase().contains(&query_lowercase));
+                    let has_query = search_doc.find(Any).any(|element| {
+                        element
+                            .text()
+                            .to_lowercase()
+                            .contains(&search_query.to_lowercase())
+                    });
                     if has_query {
                         Some(SearchResult {
                             title: title.text(),
                             url: link.clone(),
-                            snippet: extraction::extract_snippet(
-                                content.as_str(),
-                                &search_request.query,
-                            ),
+                            snippet: extraction::extract_snippet(content.as_str(), &search_query),
                         })
                     } else {
                         None
