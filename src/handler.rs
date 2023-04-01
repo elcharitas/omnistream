@@ -1,44 +1,35 @@
+use reqwest::Method;
 // Import necessary dependencies
 use vercel_runtime::{Body, Error, Request, Response, StatusCode};
 
 use crate::crawl_and_search;
 use crate::enums::SearchRequest;
+use serde_urlencoded::from_str;
 
 // This function handles search requests, performing input validation and returning search results
 pub async fn search_handler(request: Request) -> Result<Response<Body>, Error> {
     // Convert the request body to a string
     let body = String::from_utf8(request.body().to_vec())?;
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json");
-
-    // If the request body is empty, return an error with appropriate status code
-    if body.is_empty() {
-        return Ok(response
-            .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Please specify `query` and `sitemap_url`"))
-            .unwrap());
-    }
-
-    // Try to deserialize the request body into a SearchRequest object, handling any errors
-    let search_request: Result<SearchRequest, _> = serde_json::from_str(&body);
-
-    // If deserialization fails, return an error with appropriate status code
-    let search_request = match search_request {
-        Ok(sr) => sr,
-        Err(_) => {
-            return Ok(response
-                .status(StatusCode::BAD_REQUEST)
-                .body(Body::from("Invalid request format"))
+    let search_request: SearchRequest = match *request.method() {
+        Method::GET => from_str(request.uri().query().unwrap_or(""))?,
+        Method::POST => serde_json::from_str(&body)?,
+        _ => {
+            return Ok(Response::builder()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body(Body::from("Method not allowed"))
                 .unwrap());
         }
     };
 
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json");
+
     // If the query or sitemap_url is empty, return an error with appropriate status code
-    if search_request.query.is_empty() || search_request.sitemap_url.is_empty() {
+    if search_request.query.is_empty() {
         return Ok(response
             .status(StatusCode::BAD_REQUEST)
-            .body(Body::from("Please specify query and sitemap_url"))
+            .body(Body::from("Please specify query"))
             .unwrap());
     }
 
