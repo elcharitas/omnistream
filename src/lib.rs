@@ -9,27 +9,40 @@ use select::document::Document;
 use select::predicate::{Any, Name};
 use std::sync::Arc;
 
-fn get_sitemap_url(query: SearchRequest) -> String {
+fn extract_request(query: SearchRequest) -> SearchRequest {
     match query.sitemap_url {
-        Some(url) => url,
+        Some(url) => SearchRequest {
+            query: query.query,
+            sitemap_url: Some(url),
+            page: query.page,
+            per_page: query.per_page,
+        },
         None => {
             let mut url = String::from("https://google.com/sitemap.xml");
-            let query = query.query.split_whitespace();
-            for word in query {
+            let mut real_query = query.query.clone();
+            let search_query = query.query.split_whitespace();
+            for word in search_query {
                 if word.starts_with("site:") {
-                    url = word.replace("site:", "");
+                    real_query = real_query.replace(word, "");
+                    url = word.replace("site:", "https://") + "/sitemap.xml";
                 }
             }
-            url
+            SearchRequest {
+                query: real_query,
+                sitemap_url: Some(url),
+                page: query.page,
+                per_page: query.per_page,
+            }
         }
     }
 }
 
 // This function crawls and searches a website based on the given SearchRequest
 pub async fn crawl_and_search(
-    search_request: &SearchRequest,
+    request: &SearchRequest,
 ) -> Result<Vec<SearchResult>, reqwest::Error> {
-    let sitemap_url = get_sitemap_url(search_request.clone());
+    let search_request = extract_request(request.clone());
+    let sitemap_url = search_request.sitemap_url.clone().unwrap();
 
     // Retrieve the sitemap
     let sitemap_response = reqwest::get(&sitemap_url)
