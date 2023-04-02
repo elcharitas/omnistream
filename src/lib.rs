@@ -7,6 +7,7 @@ use enums::{SearchRequest, SearchResult};
 use futures::stream::{self, StreamExt};
 use select::document::Document;
 use select::predicate::{Any, Name};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 fn extract_request(query: SearchRequest) -> SearchRequest {
@@ -57,18 +58,22 @@ pub async fn crawl_and_search(
     let document = Document::from(sitemap.as_str());
 
     // Extract links from the sitemap
-    let links: Vec<_> = document.find(Name("loc")).map(|n| n.text()).collect();
+    let counter = Arc::new(AtomicUsize::new(0));
+    let per_page = search_request.per_page.unwrap_or(5) as usize;
+    let page = search_request.page.unwrap_or(1) as usize;
+    let links: Vec<_> = document
+        .find(Name("loc"))
+        .map(|n| n.text())
+        .skip((page - 1) * per_page)
+        .collect();
 
     // Crawl the links and perform the search in parallel
     let search_query = Arc::new(search_request.query.clone());
-    let per_page = search_request.per_page.unwrap_or(5) as usize;
-    let page = search_request.page.unwrap_or(1) as usize;
 
     let results = stream::iter(links.into_iter())
-        .skip((page - 1) * per_page)
-        .take(per_page)
         .map(|link| {
             let search_query = Arc::clone(&search_query);
+            let counter = Arc::clone(&counter);
             async move {
                 let content = reqwest::get(&link)
                     .await
@@ -87,10 +92,12 @@ pub async fn crawl_and_search(
                             .contains(&search_query.to_lowercase())
                     });
                     if has_query {
+                        counter.fetch_add(1, Ordering::SeqCst);
                         Some(SearchResult {
                             title: title.text(),
                             url: link.clone(),
                             snippet: extraction::extract_snippet(content.as_str(), &search_query),
+                            index: counter.load(Ordering::SeqCst).try_into().unwrap(),
                         })
                     } else {
                         None
@@ -100,7 +107,8 @@ pub async fn crawl_and_search(
                 }
             }
         })
-        .buffer_unordered(10)
+        .take_while(|_| async { per_page > counter.load(Ordering::SeqCst) })
+        .buffer_unordered(100)
         .filter_map(|result| async move { result })
         .collect::<Vec<SearchResult>>()
         .await;
