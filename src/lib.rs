@@ -75,35 +75,42 @@ pub async fn crawl_and_search(
             let search_query = Arc::clone(&search_query);
             let counter = Arc::clone(&counter);
             async move {
-                let content = reqwest::get(&link)
-                    .await
-                    .expect("Failed to fetch link")
-                    .text()
-                    .await
-                    .expect("Failed to parse link content");
+                if per_page > counter.load(Ordering::SeqCst) {
+                    None
+                } else {
+                    let content = reqwest::get(&link)
+                        .await
+                        .expect("Failed to fetch link")
+                        .text()
+                        .await
+                        .expect("Failed to parse link content");
 
-                let search_doc = Document::from(content.as_str());
+                    let search_doc = Document::from(content.as_str());
 
-                if let Some(title) = search_doc.find(Name("title")).next() {
-                    let has_query = search_doc.find(Any).any(|element| {
-                        element
-                            .text()
-                            .to_lowercase()
-                            .contains(&search_query.to_lowercase())
-                    });
-                    if has_query {
-                        counter.fetch_add(1, Ordering::SeqCst);
-                        Some(SearchResult {
-                            title: title.text(),
-                            url: link.clone(),
-                            snippet: extraction::extract_snippet(content.as_str(), &search_query),
-                            index: counter.load(Ordering::SeqCst).try_into().unwrap(),
-                        })
+                    if let Some(title) = search_doc.find(Name("title")).next() {
+                        let has_query = search_doc.find(Any).any(|element| {
+                            element
+                                .text()
+                                .to_lowercase()
+                                .contains(&search_query.to_lowercase())
+                        });
+                        if has_query {
+                            counter.fetch_add(1, Ordering::SeqCst);
+                            Some(SearchResult {
+                                title: title.text(),
+                                url: link.clone(),
+                                snippet: extraction::extract_snippet(
+                                    content.as_str(),
+                                    &search_query,
+                                ),
+                                index: counter.load(Ordering::SeqCst).try_into().unwrap(),
+                            })
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     }
-                } else {
-                    None
                 }
             }
         })
