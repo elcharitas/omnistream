@@ -13,5 +13,4 @@ pub struct SearchResult {
     pub title: String,
     pub url: String,
     pub snippet: Option<String>,
-    pub index: i32,
 }

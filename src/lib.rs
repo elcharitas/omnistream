@@ -101,7 +101,6 @@ pub async fn crawl_and_search(
                                     content.as_str(),
                                     &search_query,
                                 ),
-                                index: counter.load(Ordering::SeqCst).try_into().unwrap(),
                             })
                         } else {
                             None
