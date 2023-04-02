@@ -2,6 +2,36 @@ use select::document::Document;
 use select::node::Node;
 use select::predicate::{Attr, Name, Predicate};
 
+use crate::enums::SearchRequest;
+
+pub fn extract_request(query: SearchRequest) -> SearchRequest {
+    match query.sitemap_url {
+        Some(url) => SearchRequest {
+            query: query.query,
+            sitemap_url: Some(url),
+            page: query.page,
+            per_page: query.per_page,
+        },
+        None => {
+            let mut url = String::from("https://google.com/sitemap.xml");
+            let mut real_query = query.query.clone();
+            let search_query = query.query.split_whitespace();
+            for word in search_query {
+                if word.starts_with("site:") {
+                    real_query = real_query.replace(word, "");
+                    url = word.replace("site:", "https://") + "/sitemap.xml";
+                }
+            }
+            SearchRequest {
+                query: real_query,
+                sitemap_url: Some(url),
+                page: query.page,
+                per_page: query.per_page,
+            }
+        }
+    }
+}
+
 // This function extracts a relevant text snippet from the given HTML content and search query
 pub fn extract_snippet(html_content: &str, search_query: &str) -> Option<String> {
     let document = Document::from(html_content);

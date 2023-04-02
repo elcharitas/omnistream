@@ -3,40 +3,14 @@ mod enums;
 mod extraction;
 pub mod handler;
 
-use enums::{SearchRequest, SearchResult};
 use futures::stream::{self, StreamExt};
 use select::document::Document;
 use select::predicate::{Any, Name};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-fn extract_request(query: SearchRequest) -> SearchRequest {
-    match query.sitemap_url {
-        Some(url) => SearchRequest {
-            query: query.query,
-            sitemap_url: Some(url),
-            page: query.page,
-            per_page: query.per_page,
-        },
-        None => {
-            let mut url = String::from("https://google.com/sitemap.xml");
-            let mut real_query = query.query.clone();
-            let search_query = query.query.split_whitespace();
-            for word in search_query {
-                if word.starts_with("site:") {
-                    real_query = real_query.replace(word, "");
-                    url = word.replace("site:", "https://") + "/sitemap.xml";
-                }
-            }
-            SearchRequest {
-                query: real_query,
-                sitemap_url: Some(url),
-                page: query.page,
-                per_page: query.per_page,
-            }
-        }
-    }
-}
+use enums::{SearchRequest, SearchResult};
+use extraction::{extract_request, extract_snippet};
 
 // This function crawls and searches a website based on the given SearchRequest
 pub async fn crawl_and_search(
@@ -97,10 +71,7 @@ pub async fn crawl_and_search(
                             Some(SearchResult {
                                 title: title.text(),
                                 url: link.clone(),
-                                snippet: extraction::extract_snippet(
-                                    content.as_str(),
-                                    &search_query,
-                                ),
+                                snippet: extract_snippet(content.as_str(), &search_query),
                             })
                         } else {
                             None
