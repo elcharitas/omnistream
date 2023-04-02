@@ -75,9 +75,7 @@ pub async fn crawl_and_search(
             let search_query = Arc::clone(&search_query);
             let counter = Arc::clone(&counter);
             async move {
-                if per_page > counter.load(Ordering::SeqCst) {
-                    None
-                } else {
+                if per_page < counter.load(Ordering::SeqCst) {
                     let content = reqwest::get(&link)
                         .await
                         .expect("Failed to fetch link")
@@ -111,6 +109,8 @@ pub async fn crawl_and_search(
                     } else {
                         None
                     }
+                } else {
+                    None
                 }
             }
         })
